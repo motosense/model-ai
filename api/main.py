@@ -20,11 +20,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("motosense")
 
-BASE_DIR   = Path(__file__).resolve().parent.parent
-MODELS_DIR = BASE_DIR / "YAMNet aug-split" / "YAMNET + SVM + RF" / "models"
-
-TFLITE_PATH = MODELS_DIR / "sequential" / "tflite" / "yamnet_sequential.tflite"
-SCALER_PATH = MODELS_DIR / "sequential" / "scaler" / "yamnet_scaler.joblib"
+KERAS_PATH  = "models/sequential/keras/yamnet_sequential.h5"
+SCALER_PATH = "models/sequential/scaler/yamnet_scaler.joblib"
 
 TARGET_SR = 16_000
 CLASSES   = [
@@ -38,11 +35,9 @@ CLASSES   = [
     "Face-Drive",
 ]
 
-yamnet_model   = None
-interpreter    = None
-input_details  = None
-output_details = None
-scaler         = None
+yamnet_model  = None
+keras_model   = None
+scaler        = None
 
 app = FastAPI(
     title="MotoSense API",
@@ -65,29 +60,26 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def load_models():
-    global yamnet_model, interpreter, input_details, output_details, scaler
+    global yamnet_model, keras_model, scaler
 
     logger.info("Memuat YAMNet dari TF-Hub …")
     yamnet_model = hub.load("https://tfhub.dev/google/yamnet/1")
     logger.info("YAMNet berhasil dimuat ✓")
 
-    logger.info("Memuat TFLite model dari: %s", TFLITE_PATH)
-    if not TFLITE_PATH.exists():
-        raise FileNotFoundError(f"TFLite model tidak ditemukan: {TFLITE_PATH}")
-    interpreter = tf.lite.Interpreter(model_path=str(TFLITE_PATH))
-    interpreter.allocate_tensors()
-    input_details  = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
+    logger.info("Memuat Keras H5 model dari: %s", KERAS_PATH)
+    if not Path(KERAS_PATH).exists():
+        raise FileNotFoundError(f"Keras model tidak ditemukan: {KERAS_PATH}")
+    keras_model = tf.keras.models.load_model(KERAS_PATH)
     logger.info(
-        "TFLite dimuat ✓  | input: %s  output: %s",
-        input_details[0]["shape"],
-        output_details[0]["shape"],
+        "Keras model dimuat ✓  | input: %s  output: %s",
+        keras_model.input_shape,
+        keras_model.output_shape,
     )
 
     logger.info("Memuat scaler dari: %s", SCALER_PATH)
-    if not SCALER_PATH.exists():
+    if not Path(SCALER_PATH).exists():
         raise FileNotFoundError(f"Scaler tidak ditemukan: {SCALER_PATH}")
-    scaler = joblib.load(str(SCALER_PATH))
+    scaler = joblib.load(SCALER_PATH)
     logger.info("Scaler berhasil dimuat ✓")
 
 
@@ -121,15 +113,10 @@ def preprocess_audio(audio_bytes: bytes) -> np.ndarray:
 
 def run_inference(embedding: np.ndarray) -> tuple[str, float, list[ClassScore]]:
     scaled = scaler.transform(embedding.reshape(1, -1)).astype(np.float32)
-    expected = list(input_details[0]["shape"])
-    if list(scaled.shape) != expected:
-        scaled = scaled.reshape(expected)
-    interpreter.set_tensor(input_details[0]["index"], scaled)
-    interpreter.invoke()
-    preds = interpreter.get_tensor(output_details[0]["index"])[0]
-    idx = int(np.argmax(preds))
+    preds  = keras_model.predict(scaled, verbose=0)[0]
+    idx    = int(np.argmax(preds))
     predicted_class = CLASSES[idx]
-    confidence = float(preds[idx])
+    confidence      = float(preds[idx])
     all_scores = [
         ClassScore(label=CLASSES[i], probability=float(np.clip(p, 0.0, 1.0)))
         for i, p in enumerate(preds)
@@ -142,11 +129,11 @@ ACCEPTED_EXT = {".wav", ".mp3", ".m4a", ".ogg", ".flac"}
 
 @app.get("/", response_model=HealthResponse, tags=["Info"])
 async def health():
-    all_ready = all(x is not None for x in [yamnet_model, interpreter, scaler])
+    all_ready = all(x is not None for x in [yamnet_model, keras_model, scaler])
     return HealthResponse(
         status="ready" if all_ready else "loading",
         classes=CLASSES,
-        model="YAMNet + Sequential TFLite",
+        model="YAMNet + Sequential Keras H5",
     )
 
 
@@ -173,7 +160,7 @@ async def predict(
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="File kosong.")
 
-    if any(x is None for x in [yamnet_model, interpreter, scaler]):
+    if any(x is None for x in [yamnet_model, keras_model, scaler]):
         raise HTTPException(status_code=503, detail="Model belum selesai dimuat, coba lagi sebentar.")
 
     try:
