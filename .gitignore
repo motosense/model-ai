@@ -1,4 +1,22 @@
-helper
-models
-api/__pycache__
+helper/
+api/__pycache__/
+__pycache__/
+*.pyc
 
+# Dataset audio — exclude semua file audio agar repo tidak terlalu besar
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+
+# Python env
+.env
+venv/
+.venv/
+
+# macOS
+.DS_Store
+
+# Jupyter checkpoints
+.ipynb_checkpoints/

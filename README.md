@@ -1,141 +1,289 @@
-# MotoSense — Sistem Klasifikasi Audio Kerusakan Mesin Sepeda Motor
+# MotoSense — Klasifikasi Audio Kerusakan Mesin Sepeda Motor
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python">
-  <img src="https://img.shields.io/badge/TensorFlow-2.x-orange.svg" alt="TensorFlow">
-  <img src="https://img.shields.io/badge/YAMNet-Audio%20Classification-green.svg" alt="YAMNet">
-  <img src="https://img.shields.io/badge/Akurasi%20Terbaik-93%25-brightgreen.svg" alt="Best Accuracy">
+  <img src="https://img.shields.io/badge/TensorFlow-2.15+-orange.svg" alt="TensorFlow">
+  <img src="https://img.shields.io/badge/YAMNet-Feature%20Extractor-green.svg" alt="YAMNet">
+  <img src="https://img.shields.io/badge/Test%20Accuracy-95.75%25-brightgreen.svg" alt="Best Accuracy">
+  <img src="https://img.shields.io/badge/FastAPI-REST%20API-teal.svg" alt="FastAPI">
 </p>
-
-## 📋 Deskripsi Proyek
-
-**MotoSense** adalah sistem klasifikasi audio berbasis deep learning yang dirancang untuk mendeteksi dan mengklasifikasikan berbagai jenis kerusakan pada mesin sepeda motor melalui analisis suara. Proyek ini menggunakan **YAMNet** (Yet Another Mobile Network) dari TensorFlow Hub sebagai feature extractor, dikombinasikan dengan classifier seperti **Sequential Neural Network (Dense)**, **Support Vector Machine (SVM)**, dan **Random Forest**.
-
-### 🎯 Tujuan
-- Mendeteksi kerusakan mesin sepeda motor secara otomatis melalui audio
-- Mengklasifikasikan 8 jenis kerusakan komponen mesin
-- Menyediakan model yang dapat diimplementasikan pada perangkat mobile (TFLite)
 
 ---
 
-## 🔧 Jenis Kerusakan yang Dapat Dideteksi
+## Deskripsi Proyek
 
-Sistem ini dapat mengidentifikasi **8 kategori kerusakan** pada komponen mesin:
+**MotoSense** adalah sistem klasifikasi audio berbasis machine learning yang mendeteksi dan mengklasifikasikan kerusakan komponen mesin sepeda motor melalui analisis rekaman suara. Sistem ini mengekstrak fitur audio menggunakan **YAMNet** (pre-trained model dari Google) sebagai backbone, lalu mengklasifikasikan hasilnya menggunakan salah satu dari tiga model: **Sequential Neural Network (Dense)**, **Support Vector Machine (SVM)**, atau **Random Forest**.
+
+Tiga skenario eksperimen dilakukan untuk menentukan kombinasi augmentasi data dan model terbaik. Eksperimen terbaik (**YAMNet + Aug-Split + Sequential Dense**) menghasilkan akurasi **95.75%** pada test set (dari notebook terbaru).
+
+---
+
+## Jenis Kerusakan yang Dideteksi
+
+Sistem mengklasifikasikan **8 kategori kerusakan** komponen mesin:
 
 | No | Kelas | Komponen |
 |----|-------|----------|
 | 1 | **Clutch-Shoe** | Kampas kopling |
-| 2 | **Connecting-Rod** | Stang seher |
+| 2 | **Conecting-Rod** | Stang seher |
 | 3 | **Drive-Belt** | Van belt / sabuk CVT |
 | 4 | **Piston** | Piston |
-| 5 | **Tensioner** | Tensioner |
+| 5 | **Tensioner** | Tensioner rantai |
 | 6 | **Slider** | Slider CVT |
 | 7 | **Roller** | Roller CVT |
 | 8 | **Face-Drive** | Face pulley / drive face |
 
 ---
 
-## 🏗️ Arsitektur Sistem
+## Struktur Repository
 
-### Model Pipeline
 ```
-Audio Input (WAV/MP3/M4A)
-    ↓
-Preprocessing (16kHz, 2s duration)
-    ↓
-YAMNet Feature Extraction (1024-dim embeddings)
-    ↓
-Classifier (Sequential / SVM / Random Forest)
-    ↓
-Predicted Class + Confidence Score
+CapstonePijak2026/
+├── YAMNet aug-split/                  # Eksperimen utama ✅ (Augmentasi sebelum Split)
+│   └── YAMNET + SVM + RF/
+│       ├── MotoSense_YAMNet.ipynb     # Notebook utama — pipeline lengkap
+│       ├── dataset/                   # Dataset yang digunakan
+│       │   ├── part-rusak/            # Audio mentah per kelas
+│       │   ├── rename/                # Audio yang sudah direname standar
+│       │   ├── preprocessed/         # Audio setelah preprocessing (16kHz, 2s)
+│       │   ├── augmented/            # Audio hasil augmentasi (target 2000/kelas)
+│       │   ├── split/                # Dataset setelah split train/val/test
+│       │   └── features/             # YAMNet embeddings (.npy)
+│       └── models/
+│           ├── sequential/
+│           │   ├── keras/             # yamnet_sequential.h5
+│           │   ├── tflite/            # yamnet_sequential.tflite
+│           │   └── scaler/            # yamnet_scaler.joblib
+│           ├── svm/                   # Model SVM (joblib)
+│           └── random_forest/         # Model Random Forest (joblib)
+├── YAMNet split-aug/                  # Eksperimen 2 (Split sebelum Augmentasi)
+│   └── YAMNET + SVM + RF/
+│       └── MotoSense_YAMNet.ipynb
+├── without YAMNet/                    # Eksperimen 3 (Baseline tanpa YAMNet)
+│   └── MotoSense_CNN_NoYAMNet.ipynb
+├── api/                               # REST API (FastAPI)
+│   ├── main.py
+│   └── requirements.txt
+├── assets/                            # Visualisasi hasil eksperimen
+├── helper/                            # Notebook bantu
+├── requirements.txt
+└── README.md
 ```
-
-### Teknologi Utama
-- **YAMNet**: Pre-trained audio event detection model dari Google
-- **TensorFlow/Keras**: Deep learning framework
-- **Librosa**: Audio processing dan feature extraction
-- **Audiomentations**: Data augmentation untuk audio
-- **Scikit-learn**: Machine learning classifiers (SVM, Random Forest)
 
 ---
 
-## 📊 Hasil Training & Performa Model
+## Dataset Awal (EDA)
 
-Tiga eksperimen dilakukan dengan perbedaan pada strategi augmentasi dan pemisahan dataset:
+Dataset dikumpulkan dari rekaman suara mesin sepeda motor yang rusak. Karakteristik data mentah:
 
-### ✅ Eksperimen 1: YAMNet + Aug-Split *(Terbaik)*
-> **Augmentasi dilakukan sebelum split** → dataset lebih besar & merata
+| Kelas | Jumlah File | Sample Rate | Durasi Rata-rata | Min | Max |
+|-------|:-----------:|:-----------:|:----------------:|:---:|:---:|
+| Clutch-Shoe | 15 | 44100 Hz | 2.51s | 1.07s | 4.08s |
+| Conecting-Rod | 10 | 44100 Hz | 2.37s | 1.62s | 4.21s |
+| Drive-Belt | 20 | 44100 Hz | 3.55s | 1.60s | 6.75s |
+| Face-Drive | 9 | 44100 Hz | 3.14s | 1.20s | 4.82s |
+| Piston | 6 | 44100 Hz | 1.74s | 1.00s | 3.17s |
+| Roller | 19 | 44100 Hz | 3.78s | 1.53s | 9.15s |
+| Slider | 13 | 44100 Hz | 3.91s | 0.84s | 6.51s |
+| Tensioner | 8 | 44100 Hz | 2.97s | 1.59s | 7.41s |
+| **Total** | **100** | | | | |
 
-| Model | Val Accuracy | **Test Accuracy** | Precision | Recall | F1 Score |
-|-------|:------------:|:-----------------:|:---------:|:------:|:--------:|
-| 🥇 **Sequential (Dense)** | — | **93.00%** | 93.07% | 93.00% | 93.01% |
-| 🥈 **Random Forest** | 90.38% | **92.75%** | 92.83% | 92.75% | 92.75% |
-| 🥉 **SVM** | 91.50% | **90.62%** | 91.38% | 90.62% | 90.80% |
-
-### Eksperimen 2: YAMNet + Split-Aug
-> **Augmentasi dilakukan setelah split** → data test lebih bersih, tapi lebih sedikit
-
-| Model | Val Accuracy | **Test Accuracy** | Precision | Recall | F1 Score |
-|-------|:------------:|:-----------------:|:---------:|:------:|:--------:|
-| **Sequential (Dense)** | — | 79.17% | 80.21% | 79.17% | 76.81% |
-| **SVM** | 89.47% | 83.33% | 79.63% | 83.33% | 78.44% |
-| **Random Forest** | 89.47% | 83.33% | 80.14% | 83.33% | 78.60% |
-
-### Eksperimen 3: Tanpa YAMNet (CNN only)
-> **Menggunakan CNN langsung tanpa pre-trained YAMNet** sebagai baseline
-
-| Model | Val Accuracy | **Test Accuracy** | Precision | Recall | F1 Score |
-|-------|:------------:|:-----------------:|:---------:|:------:|:--------:|
-| **Sequential (Dense)** | — | 75.00% | 72.00% | 75.00% | 70.00% |
-| **SVM** | 78.95% | 79.17% | 68.66% | 79.17% | 72.84% |
-| **Random Forest** | 89.47% | 83.33% | 80.14% | 83.33% | 78.60% |
+Dataset awal sangat kecil dan tidak seimbang (6–20 file per kelas), sehingga augmentasi adalah komponen kritis dari pipeline ini.
 
 ---
 
-### 📈 Perbandingan Akurasi Semua Model
+## Pipeline Training
 
 ```
-Eksperimen 1 — YAMNet + Aug-Split (Best Setup)
-┌─────────────────────────────────────────────────────────┐
-│  Sequential   ████████████████████████████████  93.00% │
-│  Random Forest████████████████████████████████  92.75% │
-│  SVM          ██████████████████████████████░░  90.62% │
-└─────────────────────────────────────────────────────────┘
+Audio Mentah (WAV/MP3/M4A, 44.1kHz)
+         │
+         ▼
+  1. Rename & Standarisasi
+         │
+         ▼
+  2. EDA — Analisis durasi & sample rate
+         │
+         ▼
+  3. Preprocessing
+     - Resample ke 16kHz (target YAMNet)
+     - Segmentasi 2 detik dengan overlap 1.5 detik
+     - Normalisasi amplitudo
+         │
+         ▼
+  4. Augmentasi Audio → target 2000 segmen/kelas
+     (AddGaussianNoise, PitchShift, TimeStretch,
+      LowPassFilter, BandPassFilter, ClippingDistortion, Gain)
+         │
+         ▼
+  5. Split Dataset  →  Train / Validation / Test
+     (80% / 10% / 10%)
+         │
+         ▼
+  6. Feature Extraction — YAMNet (1024-dim embeddings)
+     - Rata-rata embedding dari seluruh frame per segmen
+         │
+         ▼
+  7. Training Classifier
+     ├── Sequential Dense NN (Keras)
+     ├── SVM (scikit-learn)
+     └── Random Forest (scikit-learn)
+         │
+         ▼
+  8. Evaluasi — Classification Report + Confusion Matrix
+         │
+         ▼
+  9. Export Model → .keras / .h5 / .tflite / .joblib
+```
+
+---
+
+## Parameter Konfigurasi
+
+### Preprocessing
+```python
+TARGET_SR      = 16000   # Sample rate yang dibutuhkan YAMNet
+DURATION       = 2       # Durasi segmen (detik)
+TARGET_SAMPLES = 32000   # 16000 × 2
+STRIDE_SAMPLES = 24000   # Overlap 1.5 detik
+```
+
+### Augmentasi
+```python
+AUG_TARGET = 2000  # Target jumlah segmen per kelas setelah augmentasi
+
+Teknik augmentasi (Audiomentations):
+- AddGaussianNoise  : SNR acak 5–15 dB
+- PitchShift        : −3 hingga +3 semitone
+- TimeStretch       : faktor 0.8x–1.2x
+- LowPassFilter     : cutoff 2000–7000 Hz
+- BandPassFilter    : pita frekuensi tertentu
+- ClippingDistortion: distorsi clipping ringan
+- Gain              : perubahan volume −12 hingga +12 dB
+```
+
+### Split Dataset
+```
+Setelah augmentasi: 2000 segmen × 8 kelas = 16.000 total segmen
+Train : 12.801 (80%)
+Val   :  1.599 (10%)
+Test  :  1.600 (10%)
+```
+
+---
+
+## Arsitektur Model
+
+### Sequential Neural Network (Dense)
+```
+Input  → (1024,)   # YAMNet embeddings
+Dense  → 512  + BatchNorm + ReLU + Dropout(0.5)
+Dense  → 256  + BatchNorm + ReLU + Dropout(0.5)
+Dense  → 128  + BatchNorm + ReLU + Dropout(0.5)
+Output → 8    + Softmax
+
+Optimizer  : Adam (lr=1e-3)
+Loss       : Categorical Crossentropy
+Batch Size : 32
+Max Epochs : 500
+Callbacks  : EarlyStopping (patience=20), ReduceLROnPlateau (factor=0.5, patience=7)
+```
+
+### Support Vector Machine (SVM)
+```
+Kernel      : RBF
+Class Weight: Balanced
+Preprocessing: StandardScaler
+```
+
+### Random Forest
+```
+n_estimators : tuned
+Class Weight : Balanced
+Preprocessing: StandardScaler
+```
+
+---
+
+## Hasil Eksperimen
+
+Tiga skenario eksperimen dibandingkan untuk mengetahui pengaruh strategi augmentasi dan penggunaan YAMNet.
+
+### Eksperimen 1 — YAMNet + Aug-Split *(Terbaik)*
+> Augmentasi dilakukan **sebelum** split dataset. Hasilnya: dataset lebih besar dan merata di semua split.
+
+| Model | Train Acc (akhir) | Val Acc (terbaik) | **Test Acc** | Precision | Recall | F1 Score |
+|-------|:-----------------:|:-----------------:|:------------:|:---------:|:------:|:--------:|
+| 🥇 **Sequential (Dense)** | 98.88% | 96.81% | **95.75%** | — | — | — |
+| 🥈 **Random Forest** | — | 90.38% | **92.75%** | 92.83% | 92.75% | 92.75% |
+| 🥉 **SVM** | — | 91.50% | **90.62%** | 91.38% | 90.62% | 90.80% |
+
+> **Catatan:** Nilai val acc Sequential (96.81%) adalah akurasi epoch terbaik (epoch 105 dari 125 epoch yang berjalan, sebelum EarlyStopping). Model yang disimpan menggunakan bobot dari epoch terbaik tersebut (`restore_best_weights=True`). Test accuracy final adalah **95.75%**.
+
+### Eksperimen 2 — YAMNet + Split-Aug
+> Augmentasi dilakukan **setelah** split. Data test lebih bersih (tidak ada augmentasi), tetapi data training lebih sedikit.
+
+| Model | Val Acc | **Test Acc** | Precision | Recall | F1 Score |
+|-------|:-------:|:------------:|:---------:|:------:|:--------:|
+| Sequential (Dense) | — | 79.17% | 80.21% | 79.17% | 76.81% |
+| SVM | 89.47% | 83.33% | 79.63% | 83.33% | 78.44% |
+| Random Forest | 89.47% | 83.33% | 80.14% | 83.33% | 78.60% |
+
+### Eksperimen 3 — Tanpa YAMNet (Baseline CNN)
+> Menggunakan CNN langsung tanpa pre-trained YAMNet sebagai pembanding baseline.
+
+| Model | Val Acc | **Test Acc** | Precision | Recall | F1 Score |
+|-------|:-------:|:------------:|:---------:|:------:|:--------:|
+| Sequential (Dense) | — | 75.00% | 72.00% | 75.00% | 70.00% |
+| SVM | 78.95% | 79.17% | 68.66% | 79.17% | 72.84% |
+| Random Forest | 89.47% | 83.33% | 80.14% | 83.33% | 78.60% |
+
+---
+
+## Perbandingan Akurasi
+
+```
+Eksperimen 1 — YAMNet + Aug-Split (Setup Terbaik)
+┌──────────────────────────────────────────────────────────┐
+│  Sequential   ██████████████████████████████  95.75%    │
+│  Random Forest████████████████████████████░   92.75%    │
+│  SVM          ██████████████████████████████  90.62%    │
+└──────────────────────────────────────────────────────────┘
 
 Eksperimen 2 — YAMNet + Split-Aug
-┌─────────────────────────────────────────────────────────┐
-│  Sequential   █████████████████████████░░░░░░░  79.17% │
-│  SVM          ██████████████████████████░░░░░░  83.33% │
-│  Random Forest██████████████████████████░░░░░░  83.33% │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  Sequential   ███████████████████████░░░░░░   79.17%    │
+│  SVM          █████████████████████████░░░░   83.33%    │
+│  Random Forest█████████████████████████░░░░   83.33%    │
+└──────────────────────────────────────────────────────────┘
 
 Eksperimen 3 — Tanpa YAMNet (Baseline)
-┌─────────────────────────────────────────────────────────┐
-│  Sequential   ████████████████████████░░░░░░░░  75.00% │
-│  SVM          █████████████████████████░░░░░░░  79.17% │
-│  Random Forest██████████████████████████░░░░░░  83.33% │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  Sequential   █████████████████████░░░░░░░░   75.00%    │
+│  SVM          ████████████████████████░░░░░   79.17%    │
+│  Random Forest█████████████████████████░░░░   83.33%    │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 📉 Kurva Training — Sequential (YAMNet + Aug-Split)
+## Kurva Training — Sequential (YAMNet + Aug-Split)
 
-![Training Accuracy & Loss - YAMNet Dense](assets/training_curve_sequential.png)
+![Training Accuracy & Loss](assets/yamnet_dense_training.png)
 
-Model berhasil konvergen dengan baik:
-- **Train Accuracy** mencapai ~96% di akhir training
-- **Val Accuracy** stabil di ~92–93%
-- **Loss** turun konsisten tanpa overfitting signifikan
+Training berhenti di epoch 125 (EarlyStopping, patience=20). Model dikembalikan ke bobot epoch terbaik (epoch 105):
+- Train accuracy akhir: **~98.88%**
+- Val accuracy terbaik (epoch 105): **96.81%**
+- Test accuracy final: **95.75%**
+- Learning rate diturunkan secara bertahap oleh ReduceLROnPlateau: 1e-3 → 5e-4 → 2.5e-4 → 1.25e-4 → 6.25e-5
 
 ---
 
-### 🔥 Confusion Matrix — YAMNet + Aug-Split
+## Confusion Matrix & Classification Report — Eksperimen 1
 
-#### Sequential Neural Network (93.00% Test Accuracy)
-![Confusion Matrix - Sequential](assets/confusion_matrix_sequential.png)
+### Sequential Neural Network — Test Accuracy: 95.75%
 
-**Classification Report — Sequential:**
+![Confusion Matrix Sequential](assets/confusion_matrix_sequential.png)
+
 ```
                precision    recall  f1-score   support
 
@@ -153,10 +301,10 @@ Conecting-Rod       0.98      0.96      0.97       100
  weighted avg       0.93      0.93      0.93       800
 ```
 
-#### Support Vector Machine (90.62% Test Accuracy)
-![Confusion Matrix - SVM](assets/confusion_matrix_svm.png)
+### Support Vector Machine — Test Accuracy: 90.62%
 
-**Classification Report — SVM:**
+![Confusion Matrix SVM](assets/confusion_matrix_svm.png)
+
 ```
                precision    recall  f1-score   support
 
@@ -174,10 +322,10 @@ Conecting-Rod       0.99      0.86      0.92       100
  weighted avg       0.91      0.91      0.91       800
 ```
 
-#### Random Forest (92.75% Test Accuracy)
-![Confusion Matrix - Random Forest](assets/confusion_matrix_rf.png)
+### Random Forest — Test Accuracy: 92.75%
 
-**Classification Report — Random Forest:**
+![Confusion Matrix Random Forest](assets/confusion_matrix_rf.png)
+
 ```
                precision    recall  f1-score   support
 
@@ -197,297 +345,168 @@ Conecting-Rod       0.99      0.97      0.98       100
 
 ---
 
-### 📌 Kesimpulan Eksperimen
+## Visualisasi Embedding
+
+### Distribusi Embedding YAMNet (per kelas)
+![Embedding Distribution](assets/yamnet_embedding_distribution.png)
+
+### PCA Embedding
+![PCA Embedding](assets/pca_embedding.png)
+
+### UMAP Embedding
+![UMAP Embedding](assets/umap_embedding.png)
+
+### t-SNE Embedding
+![t-SNE Embedding](assets/tsne_embedding.png)
+
+---
+
+## Kesimpulan Eksperimen
 
 | Aspek | Temuan |
 |-------|--------|
-| **Strategi terbaik** | Augmentasi sebelum split (Aug-Split) menghasilkan akurasi lebih tinggi |
-| **Model terbaik** | YAMNet + Sequential (Dense) dengan **93.00%** test accuracy |
-| **Kontribusi YAMNet** | Transfer learning YAMNet meningkatkan akurasi ~10–15% dibanding CNN tanpa YAMNet |
-| **Kelas tersulit** | `Face-Drive` dan `Clutch-Shoe` memiliki F1-score terendah di semua model |
-| **Kelas termudah** | `Connecting-Rod` dan `Piston` konsisten mencapai F1-score ≥ 0.97 |
+| **Strategi augmentasi terbaik** | Augmentasi sebelum split (Aug-Split) menghasilkan akurasi lebih tinggi secara konsisten di semua model |
+| **Model terbaik** | YAMNet + Sequential Dense — test accuracy **95.75%** |
+| **Kontribusi YAMNet** | Transfer learning YAMNet meningkatkan akurasi ~10–16% dibanding CNN tanpa YAMNet |
+| **Kelas tersulit** | `Face-Drive` dan `Clutch-Shoe` — F1-score terendah di semua model |
+| **Kelas termudah** | `Conecting-Rod` dan `Piston` — F1-score ≥ 0.97 di Sequential |
+| **Efek augmentasi sebelum split** | Lebih banyak variasi di training set → generalisasi lebih baik |
 
 ---
 
-## 📦 Instalasi
+## REST API
+
+Model Sequential Dense di-deploy sebagai REST API menggunakan **FastAPI**.
+
+### Endpoint
+
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| `GET` | `/` | Health check & status model |
+| `GET` | `/classes` | Daftar 8 kelas kerusakan |
+| `POST` | `/predict` | Upload audio → prediksi kelas |
+
+### Contoh Response `/predict`
+
+```json
+{
+  "filename": "rekaman_mesin.wav",
+  "predicted_class": "Clutch-Shoe",
+  "confidence": 0.9412,
+  "all_scores": [
+    { "label": "Clutch-Shoe",   "probability": 0.9412 },
+    { "label": "Conecting-Rod", "probability": 0.0031 },
+    { "label": "Drive-Belt",    "probability": 0.0189 },
+    { "label": "Piston",        "probability": 0.0008 },
+    { "label": "Tensioner",     "probability": 0.0144 },
+    { "label": "Slider",        "probability": 0.0097 },
+    { "label": "Roller",        "probability": 0.0062 },
+    { "label": "Face-Drive",    "probability": 0.0057 }
+  ],
+  "inference_ms": 412.3
+}
+```
+
+Format audio yang diterima: `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`
+
+### Menjalankan API
+
+```bash
+cd api
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+> **Catatan:** File model (`models/sequential/keras/yamnet_sequential.h5` dan `models/sequential/scaler/yamnet_scaler.joblib`) harus tersedia relatif terhadap direktori `api/`.
+
+### Inferensi API
+
+Pipeline inferensi di API:
+1. Load audio → resample 16kHz → mono
+2. Trim silence (top_db=30)
+3. Normalisasi amplitudo
+4. Ekstraksi YAMNet embeddings → rata-rata per segmen
+5. StandardScaler transform
+6. Prediksi dengan Sequential Dense model
+7. Kembalikan kelas + confidence + all scores
+
+---
+
+## Instalasi & Reproduksi
 
 ### Prerequisites
-- Python 3.8 atau lebih tinggi
-- pip (Python package manager)
-- ffmpeg (untuk audio processing)
 
-### Langkah Instalasi
+- Python 3.8+
+- pip
+- ffmpeg
 
-1. **Clone Repository**
 ```bash
-git clone https://github.com/motosense/model-ai.git
-cd model-ai
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt-get install ffmpeg
 ```
 
-2. **Install Dependencies**
-```bash
-pip install -r requirements.txt
-```
+### Install Dependencies (Notebook)
 
-Atau install secara manual:
 ```bash
-pip install tensorflow tensorflow-hub
-pip install librosa soundfile
+pip install tensorflow>=2.15.0 tensorflow-hub>=0.16.0
+pip install librosa>=0.10.2 soundfile>=0.12.1
 pip install audiomentations
-pip install scikit-learn
-pip install pandas numpy matplotlib seaborn
+pip install scikit-learn>=1.4.0
+pip install numpy pandas matplotlib seaborn
+pip install umap-learn
 pip install jupyter ipywidgets
 ```
 
-3. **Install FFmpeg** (jika belum terinstall)
-- **macOS**: `brew install ffmpeg`
-- **Ubuntu/Debian**: `sudo apt-get install ffmpeg`
-- **Windows**: Download dari [ffmpeg.org](https://ffmpeg.org/download.html)
+### Install Dependencies (API)
 
----
-
-## 📂 Struktur Dataset
-
-```
-dataset/
-├── part-rusak/              # Dataset audio mentah
-│   ├── Clutch-Shoe/
-│   ├── Conecting-Rod/
-│   ├── Drive-Belt/
-│   ├── Piston/
-│   ├── Tensioner/
-│   ├── Slider/
-│   ├── Roller/
-│   └── Face-Drive/
-├── rename/                  # File audio yang sudah direname
-├── preprocessed/            # Audio setelah preprocessing
-├── augmented/               # Audio hasil augmentasi (target: 1000 file/kelas)
-└── split/                   # Dataset split (train/validation/test)
-    ├── train/
-    ├── validation/
-    └── test/
-```
-
----
-
-## 🚀 Cara Menggunakan
-
-### 1. Persiapan Data
-
-Letakkan file audio kerusakan mesin di folder `dataset/part-rusak/` sesuai dengan kategori masing-masing.
-
-### 2. Training Model
-
-Buka dan jalankan notebook sesuai kebutuhan:
-
-#### a. **YAMNet + Sequential Neural Network** *(Direkomendasikan)*
 ```bash
+pip install -r api/requirements.txt
+```
+
+> **Catatan khusus:** Jika muncul error `distutils/pkg_resources` setelah install `tensorflow-hub`, jalankan:
+> ```bash
+> pip install "setuptools<81" --force-reinstall
+> ```
+
+---
+
+## Menjalankan Notebook
+
+Buka notebook di direktori eksperimen yang diinginkan:
+
+```bash
+# Eksperimen terbaik (Aug-Split)
 jupyter notebook "YAMNet aug-split/YAMNET + SVM + RF/MotoSense_YAMNet.ipynb"
 ```
 
-### 3. Pipeline Training
-
-Notebook akan menjalankan pipeline berikut:
-
-1. **Rename Files**: Standarisasi penamaan file
-2. **Exploratory Data Analysis (EDA)**: Analisis durasi, sample rate
-3. **Preprocessing**:
-   - Resample ke 16kHz
-   - Segmentasi audio (2 detik dengan overlap)
-   - Normalisasi
-4. **Data Augmentation**:
-   - Gaussian Noise
-   - Pitch Shift
-   - Time Stretch
-   - Low/Band Pass Filter
-   - Clipping Distortion
-5. **Feature Extraction**: YAMNet embeddings (1024 dimensi)
-6. **Model Training**: Sequential NN / SVM / Random Forest
-7. **Evaluation**: Classification report, confusion matrix
-8. **Export**: Model TFLite untuk deployment mobile
-
-### 4. Inferensi
-
-Gunakan widget interaktif di notebook untuk melakukan prediksi:
-
-```python
-# Upload audio file melalui widget
-# Model akan otomatis melakukan prediksi dan menampilkan hasil
-```
+Notebook akan menjalankan seluruh pipeline secara berurutan:
+1. Setup path dan konfigurasi
+2. Rename & standardisasi nama file
+3. EDA — analisis durasi, sample rate, distribusi kelas
+4. Preprocessing — resample, segmentasi, normalisasi
+5. Augmentasi — menggunakan Audiomentations
+6. Split dataset — train/val/test
+7. Ekstraksi fitur YAMNet — menghasilkan 1024-dim embeddings
+8. Training Sequential Dense NN
+9. Training SVM
+10. Training Random Forest
+11. Evaluasi — classification report, confusion matrix
+12. Export model ke format Keras, TFLite, dan joblib
 
 ---
 
-## 📊 Preprocessing & Augmentasi
+## Referensi
 
-### Parameter Preprocessing
-```python
-TARGET_SR = 16000           # Sample rate YAMNet
-DURATION = 2                # Durasi segmen (detik)
-TARGET_SAMPLES = 32000      # 16000 * 2
-STRIDE_SAMPLES = 24000      # Overlap 1.5 detik
-```
-
-### Teknik Augmentasi
-- **AddGaussianNoise**: Menambah noise gaussian (SNR: 5–15 dB)
-- **PitchShift**: Mengubah pitch (−3 hingga +3 semitones)
-- **TimeStretch**: Mempercepat/memperlambat (0.8x–1.2x)
-- **LowPassFilter**: Filter frekuensi tinggi (2000–7000 Hz)
-- **BandPassFilter**: Filter pita frekuensi
-- **ClippingDistortion**: Menambah distorsi
-- **Gain**: Mengubah volume (−12 hingga +12 dB)
-
-**Target**: 1000 sampel per kelas (8000 total)
+1. **YAMNet** — [TensorFlow Hub](https://tfhub.dev/google/yamnet/1)
+2. **Audiomentations** — [GitHub iver56/audiomentations](https://github.com/iver56/audiomentations)
+3. **Librosa** — [librosa.org](https://librosa.org/)
+4. Howard, A., et al. (2017). *MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications.* arXiv:1704.04861
 
 ---
 
-## 🎯 Konfigurasi Model
-
-### Sequential Neural Network (Dense)
-```python
-Model: Sequential
-- Input: YAMNet Embeddings (1024 dim)
-- Dense Layer 1: 512 units, ReLU, Dropout(0.3)
-- Dense Layer 2: 256 units, ReLU, Dropout(0.3)
-- Dense Layer 3: 128 units, ReLU, Dropout(0.2)
-- Output: 8 units (softmax)
-
-Optimizer: Adam (lr=1e-4)
-Loss: Categorical Crossentropy
-Batch Size: 8
-Epochs: 100 (with EarlyStopping + ReduceLROnPlateau)
-```
-
-### Support Vector Machine (SVM)
-```python
-Kernel: RBF
-Class Weight: Balanced
-Pre-processing: StandardScaler
-```
-
-### Random Forest
-```python
-n_estimators: 100–200
-max_depth: Tuned via GridSearchCV
-Class Weight: Balanced
-```
-
----
-
-## 📱 Export ke TensorFlow Lite
-
-Model dapat dikonversi ke TFLite untuk deployment mobile:
-
-```python
-# Conversion sudah tersedia di notebook
-# Output: yamnet_sequential.tflite
-```
-
-File model tersimpan di:
-```
-models/sequential/tflite/yamnet_sequential.tflite
-```
-
----
-
-## 🔬 Exploratory Data Analysis (EDA)
-
-Dataset asli memiliki karakteristik:
-
-| Kelas | Jumlah File | Sample Rate | Durasi Rata-rata | Min | Max |
-|-------|:-----------:|:-----------:|:----------------:|:---:|:---:|
-| Clutch-Shoe | 15 | 44100 Hz | 2.51s | 1.07s | 4.08s |
-| Connecting-Rod | 10 | 44100 Hz | 2.37s | 1.62s | 4.21s |
-| Drive-Belt | 20 | 44100 Hz | 3.55s | 1.60s | 6.75s |
-| Piston | 6 | 44100 Hz | 1.74s | 1.00s | 3.17s |
-| Tensioner | 8 | 44100 Hz | 2.97s | 1.59s | 7.41s |
-| Slider | 13 | 44100 Hz | 3.91s | 0.84s | 6.51s |
-| Roller | 19 | 44100 Hz | 3.78s | 1.53s | 9.15s |
-| Face-Drive | 9 | 44100 Hz | 3.14s | 1.20s | 4.82s |
-
-**Setelah augmentasi**: 1000 sampel per kelas = **8.000 total sampel**
-
----
-
-## 🗂️ Struktur Repository
-
-```
-├── YAMNet aug-split/                    # Eksperimen: Aug sebelum Split ✅
-│   └── YAMNET + SVM + RF/
-│       ├── MotoSense_YAMNet.ipynb       # Notebook utama
-│       ├── dataset/                      # Dataset
-│       └── models/                       # Model yang tersimpan
-│           ├── sequential/               # Sequential NN
-│           │   ├── keras/               # Format .keras
-│           │   └── tflite/              # Format .tflite
-│           ├── svm/                     # SVM model (joblib)
-│           └── random_forest/           # Random Forest model
-├── YAMNet split-aug/                    # Eksperimen: Split sebelum Aug
-│   └── YAMNET + SVM + RF/
-│       └── MotoSense_YAMNet.ipynb
-├── without YAMNet/                      # Eksperimen: CNN tanpa YAMNet
-│   └── MotoSense_CNN_NoYAMNet.ipynb
-├── helper/
-│   └── kalsisfikasi_audio.ipynb         # Notebook helper/alternatif
-├── api/                                 # REST API deployment
-├── assets/                              # Gambar & visualisasi
-├── README.md                            # Dokumentasi ini
-└── requirements.txt                     # Dependencies
-```
-
----
-
-## 🛠️ Troubleshooting
-
-### Issue: FFmpeg tidak ditemukan
-**Solusi**: Install ffmpeg sesuai OS Anda (lihat bagian Instalasi)
-
-### Issue: Out of Memory saat training
-**Solusi**:
-- Kurangi `BATCH_SIZE`
-- Gunakan GPU jika tersedia
-- Reduce augmentation target
-
-### Issue: Model overfitting
-**Solusi**:
-- Tambah Dropout layers
-- Augmentasi lebih agresif
-- Kurangi kompleksitas model
-
----
-
-## 📚 Referensi
-
-1. **YAMNet**: [TensorFlow Hub - YAMNet](https://tfhub.dev/google/yamnet/1)
-2. **Audiomentations**: [GitHub - iver56/audiomentations](https://github.com/iver56/audiomentations)
-3. **Librosa**: [librosa.org](https://librosa.org/)
-4. Paper: *"Transfer Learning for Audio Classification using YAMNet"*
-
----
-
-## 👥 Tim Pengembang
+## Anggota Tim
 
 **Capstone Project — Pijak IBM 2026**
-
----
-
-## 📄 Lisensi
-
-[MIT License]
-
----
-
-## 🙏 Acknowledgments
-
-- Google Research untuk YAMNet pre-trained model
-- TensorFlow Team
-- IBM Capstone Program
-
----
-
-## 📞 Kontak
-
-Untuk pertanyaan atau saran, silakan buat issue di repository ini.
-
----
-
-**Happy Coding! 🚀**
