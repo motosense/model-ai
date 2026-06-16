@@ -3,12 +3,14 @@ api/__pycache__/
 __pycache__/
 *.pyc
 
-# Dataset audio — exclude semua file audio agar repo tidak terlalu besar
-*.wav
-*.mp3
-*.m4a
-*.ogg
-*.flac
+# Dataset audio augmented/preprocessed/split — exclude karena terlalu besar (~16.000 file)
+YAMNet aug-split/YAMNET + SVM + RF/dataset/augmented/
+YAMNet aug-split/YAMNET + SVM + RF/dataset/preprocessed/
+YAMNet aug-split/YAMNET + SVM + RF/dataset/rename/
+YAMNet aug-split/YAMNET + SVM + RF/dataset/split/
+
+# Feature files (NumPy arrays) — bisa digenerate ulang dari notebook
+*.npy
 
 # Python env
 .env
