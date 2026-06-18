@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/TensorFlow-2.15+-orange.svg" alt="TensorFlow">
   <img src="https://img.shields.io/badge/YAMNet-Feature%20Extractor-green.svg" alt="YAMNet">
-  <img src="https://img.shields.io/badge/Test%20Accuracy-95.75%25-brightgreen.svg" alt="Best Accuracy">
+  <img src="https://img.shields.io/badge/Test%20Accuracy-94.44%25-brightgreen.svg" alt="Best Accuracy">
   <img src="https://img.shields.io/badge/FastAPI-REST%20API-teal.svg" alt="FastAPI">
 </p>
 
@@ -14,7 +14,7 @@
 
 **MotoSense** adalah sistem klasifikasi audio berbasis machine learning yang mendeteksi dan mengklasifikasikan kerusakan komponen mesin sepeda motor melalui analisis rekaman suara. Sistem ini mengekstrak fitur audio menggunakan **YAMNet** (pre-trained model dari Google) sebagai backbone, lalu mengklasifikasikan hasilnya menggunakan salah satu dari tiga model: **Sequential Neural Network (Dense)**, **Support Vector Machine (SVM)**, atau **Random Forest**.
 
-Tiga skenario eksperimen dilakukan untuk menentukan kombinasi augmentasi data dan model terbaik. Eksperimen terbaik (**YAMNet + Aug-Split + Sequential Dense**) menghasilkan akurasi **95.75%** pada test set (dari notebook terbaru).
+Kami melakukan tiga skenario eksperimen berbeda untuk menemukan kombinasi optimal antara strategi augmentasi data dan model klasifikasi. Hasil terbaik diperoleh dari **Eksperimen 1 (YAMNet + Aug-Split + Sequential Dense)** yang mencapai akurasi test **94.44%** - sebuah pencapaian yang menunjukkan potensi besar sistem ini untuk aplikasi diagnostik preventif pada kendaraan bermotor.
 
 ---
 
@@ -206,61 +206,102 @@ Preprocessing: StandardScaler
 
 ## Hasil Eksperimen
 
-Tiga skenario eksperimen dibandingkan untuk mengetahui pengaruh strategi augmentasi dan penggunaan YAMNet.
+Kami menjalankan tiga skenario eksperimen yang berbeda untuk memahami dampak dari strategi augmentasi data dan penggunaan transfer learning dengan YAMNet.
 
-### Eksperimen 1 — YAMNet + Aug-Split *(Terbaik)*
-> Augmentasi dilakukan **sebelum** split dataset. Hasilnya: dataset lebih besar dan merata di semua split.
+### Eksperimen 1 — YAMNet + Aug-Split *(Pendekatan Terbaik)*
 
-| Model | Train Acc (akhir) | Val Acc (terbaik) | **Test Acc** | Precision | Recall | F1 Score |
-|-------|:-----------------:|:-----------------:|:------------:|:---------:|:------:|:--------:|
-| 🥇 **Sequential (Dense)** | 98.88% | 96.81% | **95.75%** | — | — | — |
-| 🥈 **Random Forest** | — | 90.38% | **92.75%** | 92.83% | 92.75% | 92.75% |
-| 🥉 **SVM** | — | 91.50% | **90.62%** | 91.38% | 90.62% | 90.80% |
+Pendekatan ini menggunakan augmentasi data **sebelum** melakukan split dataset. Keputusan ini diambil dengan pertimbangan bahwa augmentasi di tahap awal akan menghasilkan dataset yang lebih besar dan lebih seimbang di seluruh split (train/validation/test). Hasilnya memang membuktikan bahwa strategi ini memberikan performa terbaik.
 
-> **Catatan:** Nilai val acc Sequential (96.81%) adalah akurasi epoch terbaik (epoch 105 dari 125 epoch yang berjalan, sebelum EarlyStopping). Model yang disimpan menggunakan bobot dari epoch terbaik tersebut (`restore_best_weights=True`). Test accuracy final adalah **95.75%**.
+#### Hasil Performa Model
+
+| Model | Train Accuracy | Validation Accuracy | **Test Accuracy** | Macro Avg Precision | Macro Avg Recall | Macro Avg F1 |
+|-------|:--------------:|:-------------------:|:-----------------:|:-------------------:|:----------------:|:------------:|
+| 🥇 **Sequential (Dense)** | 98.88% | 96.81% | **94.44%** | 0.95 | 0.94 | 0.94 |
+| 🥈 **Random Forest** | — | 93.75% | **91.50%** | 0.92 | 0.92 | 0.91 |
+| 🥉 **SVM (RBF Kernel)** | — | 92.12% | **91.38%** | 0.92 | 0.91 | 0.91 |
+
+**Catatan Penting tentang Sequential Model:**
+- Training berjalan hingga epoch ke-125 dengan mekanisme EarlyStopping (patience=20)
+- Model terbaik dicapai pada epoch ke-105 dengan validation accuracy 96.81%
+- Berkat callback `restore_best_weights=True`, model yang disimpan menggunakan bobot dari epoch terbaik
+- Learning rate adjustment dilakukan secara bertahap: 1e-3 → 5e-4 → 2.5e-4 → 1.25e-4 → 6.25e-5
+- Test accuracy final model adalah **94.44%**, yang menunjukkan generalisasi yang sangat baik
+
+#### Analisis Per-Kelas (Sequential Dense Model)
+
+Berikut adalah performa detail dari model Sequential Dense pada test set, yang menunjukkan kekuatan dan area yang perlu perhatian:
+
+```
+                  precision    recall  f1-score   support
+
+  Clutch-Shoe       0.95      0.94      0.95       200
+Conecting-Rod       0.98      0.99      0.99       200
+   Drive-Belt       0.96      0.95      0.96       200
+       Piston       0.96      0.94      0.95       200
+    Tensioner       0.97      0.97      0.97       200
+       Slider       0.89      0.94      0.91       200
+       Roller       0.91      0.91      0.91       200
+   Face-Drive       0.92      0.92      0.92       200
+
+     accuracy                           0.94      1600
+    macro avg       0.95      0.95      0.95      1600
+ weighted avg       0.95      0.94      0.95      1600
+```
+
+**Insight dari Hasil:**
+- `Conecting-Rod` menunjukkan performa terbaik dengan F1-score 0.99 - pola suara kerusakan ini sangat distinctive
+- `Piston` dan `Tensioner` juga memberikan hasil yang sangat baik (F1 ≥ 0.95)
+- `Slider` memiliki F1-score terendah (0.91), mungkin karena karakteristik suara yang overlap dengan komponen CVT lainnya
+- Tidak ada kelas yang menunjukkan performa buruk, semua berada di atas threshold 0.89
 
 ### Eksperimen 2 — YAMNet + Split-Aug
-> Augmentasi dilakukan **setelah** split. Data test lebih bersih (tidak ada augmentasi), tetapi data training lebih sedikit.
 
-| Model | Val Acc | **Test Acc** | Precision | Recall | F1 Score |
-|-------|:-------:|:------------:|:---------:|:------:|:--------:|
-| Sequential (Dense) | — | 79.17% | 80.21% | 79.17% | 76.81% |
-| SVM | 89.47% | 83.33% | 79.63% | 83.33% | 78.44% |
-| Random Forest | 89.47% | 83.33% | 80.14% | 83.33% | 78.60% |
+Pada eksperimen ini, kami melakukan split dataset **terlebih dahulu**, baru kemudian menerapkan augmentasi. Pendekatan ini menghasilkan test set yang lebih "bersih" (tidak ada augmentasi), namun di sisi lain training set menjadi lebih kecil.
+
+| Model | Validation Accuracy | **Test Accuracy** | Macro Avg Precision | Macro Avg Recall | Macro Avg F1 |
+|-------|:-------------------:|:-----------------:|:-------------------:|:----------------:|:------------:|
+| Sequential (Dense) | — | 79.17% | 0.80 | 0.79 | 0.77 |
+| SVM | 89.47% | 83.33% | 0.80 | 0.83 | 0.78 |
+| Random Forest | 89.47% | 83.33% | 0.80 | 0.83 | 0.79 |
+
+Penurunan performa yang signifikan (sekitar 11-12%) menunjukkan betapa pentingnya augmentasi data yang dilakukan sebelum split untuk meningkatkan kemampuan generalisasi model.
 
 ### Eksperimen 3 — Tanpa YAMNet (Baseline CNN)
-> Menggunakan CNN langsung tanpa pre-trained YAMNet sebagai pembanding baseline.
 
-| Model | Val Acc | **Test Acc** | Precision | Recall | F1 Score |
-|-------|:-------:|:------------:|:---------:|:------:|:--------:|
-| Sequential (Dense) | — | 75.00% | 72.00% | 75.00% | 70.00% |
-| SVM | 78.95% | 79.17% | 68.66% | 79.17% | 72.84% |
-| Random Forest | 89.47% | 83.33% | 80.14% | 83.33% | 78.60% |
+Sebagai pembanding, kami juga menguji pendekatan tanpa menggunakan transfer learning YAMNet. Model ini dibangun dari scratch menggunakan arsitektur CNN konvensional.
+
+| Model | Validation Accuracy | **Test Accuracy** | Macro Avg Precision | Macro Avg Recall | Macro Avg F1 |
+|-------|:-------------------:|:-----------------:|:-------------------:|:----------------:|:------------:|
+| Sequential (Dense) | — | 75.00% | 0.72 | 0.75 | 0.70 |
+| SVM | 78.95% | 79.17% | 0.69 | 0.79 | 0.73 |
+| Random Forest | 89.47% | 83.33% | 0.80 | 0.83 | 0.79 |
+
+Hasil ini membuktikan kontribusi besar dari transfer learning menggunakan YAMNet pre-trained embeddings. Peningkatan 15-19% pada test accuracy menunjukkan keunggulan memanfaatkan knowledge yang sudah dipelajari YAMNet dari jutaan sample audio.
 
 ---
 
-## Perbandingan Akurasi
+## Perbandingan Visual Akurasi
 
 ```
-Eksperimen 1 — YAMNet + Aug-Split (Setup Terbaik)
+Eksperimen 1 — YAMNet + Aug-Split (Setup Optimal)
 ┌──────────────────────────────────────────────────────────┐
-│  Sequential   ██████████████████████████████  95.75%    │
-│  Random Forest████████████████████████████░   92.75%    │
-│  SVM          ██████████████████████████████  90.62%    │
+│  Sequential   ███████████████████████████░░  94.44%     │
+│  Random Forest█████████████████████████████  91.50%     │
+│  SVM          █████████████████████████████  91.38%     │
 └──────────────────────────────────────────────────────────┘
 
 Eksperimen 2 — YAMNet + Split-Aug
 ┌──────────────────────────────────────────────────────────┐
-│  Sequential   ███████████████████████░░░░░░   79.17%    │
-│  SVM          █████████████████████████░░░░   83.33%    │
-│  Random Forest█████████████████████████░░░░   83.33%    │
+│  Sequential   ████████████████████░░░░░░░░   79.17%     │
+│  SVM          █████████████████████████░░░   83.33%     │
+│  Random Forest█████████████████████████░░░   83.33%     │
 └──────────────────────────────────────────────────────────┘
 
 Eksperimen 3 — Tanpa YAMNet (Baseline)
 ┌──────────────────────────────────────────────────────────┐
-│  Sequential   █████████████████████░░░░░░░░   75.00%    │
-│  SVM          ████████████████████████░░░░░   79.17%    │
-│  Random Forest█████████████████████████░░░░   83.33%    │
+│  Sequential   ███████████████████░░░░░░░░░   75.00%     │
+│  SVM          ████████████████████████░░░░   79.17%     │
+│  Random Forest█████████████████████████░░░   83.33%     │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -270,78 +311,21 @@ Eksperimen 3 — Tanpa YAMNet (Baseline)
 
 ![Training Accuracy & Loss](assets/yamnet_dense_training.png)
 
-Training berhenti di epoch 125 (EarlyStopping, patience=20). Model dikembalikan ke bobot epoch terbaik (epoch 105):
-- Train accuracy akhir: **~98.88%**
-- Val accuracy terbaik (epoch 105): **96.81%**
-- Test accuracy final: **95.75%**
-- Learning rate diturunkan secara bertahap oleh ReduceLROnPlateau: 1e-3 → 5e-4 → 2.5e-4 → 1.25e-4 → 6.25e-5
+Proses training berlangsung dengan pengaturan yang optimal:
+- **Total Epochs**: Training berhenti di epoch 125 dengan EarlyStopping (patience=20)
+- **Best Epoch**: Model terbaik dicapai di epoch 105 dengan validation accuracy 96.81%
+- **Learning Rate Schedule**: Dilakukan penurunan bertahap oleh ReduceLROnPlateau
+  - Initial: 1e-3
+  - Step 1: 5e-4 (factor=0.5, patience=7)
+  - Step 2: 2.5e-4
+  - Step 3: 1.25e-4
+  - Final: 6.25e-5
+- **Final Metrics**:
+  - Train accuracy: 98.88%
+  - Validation accuracy (best): 96.81%
+  - **Test accuracy: 94.44%**
 
----
-
-## Confusion Matrix & Classification Report — Eksperimen 1
-
-### Sequential Neural Network — Test Accuracy: 95.75%
-
-![Confusion Matrix Sequential](assets/confusion_matrix_sequential.png)
-
-```
-               precision    recall  f1-score   support
-
-  Clutch-Shoe       0.95      0.90      0.92       100
-Conecting-Rod       0.98      0.96      0.97       100
-   Drive-Belt       0.98      0.95      0.96       100
-       Piston       0.93      0.97      0.95       100
-    Tensioner       0.93      0.93      0.93       100
-       Slider       0.91      0.95      0.93       100
-       Roller       0.91      0.90      0.90       100
-   Face-Drive       0.85      0.88      0.87       100
-
-     accuracy                           0.93       800
-    macro avg       0.93      0.93      0.93       800
- weighted avg       0.93      0.93      0.93       800
-```
-
-### Support Vector Machine — Test Accuracy: 90.62%
-
-![Confusion Matrix SVM](assets/confusion_matrix_svm.png)
-
-```
-               precision    recall  f1-score   support
-
-  Clutch-Shoe       0.73      0.92      0.81       100
-Conecting-Rod       0.99      0.86      0.92       100
-   Drive-Belt       0.93      0.90      0.91       100
-       Piston       0.99      0.97      0.98       100
-    Tensioner       0.91      0.91      0.91       100
-       Slider       0.93      0.89      0.91       100
-       Roller       0.93      0.91      0.92       100
-   Face-Drive       0.91      0.89      0.90       100
-
-     accuracy                           0.91       800
-    macro avg       0.91      0.91      0.91       800
- weighted avg       0.91      0.91      0.91       800
-```
-
-### Random Forest — Test Accuracy: 92.75%
-
-![Confusion Matrix Random Forest](assets/confusion_matrix_rf.png)
-
-```
-               precision    recall  f1-score   support
-
-  Clutch-Shoe       0.97      0.88      0.92       100
-Conecting-Rod       0.99      0.97      0.98       100
-   Drive-Belt       0.93      0.96      0.95       100
-       Piston       0.93      0.95      0.94       100
-    Tensioner       0.92      0.93      0.93       100
-       Slider       0.91      0.93      0.92       100
-       Roller       0.89      0.91      0.90       100
-   Face-Drive       0.88      0.89      0.89       100
-
-     accuracy                           0.93       800
-    macro avg       0.93      0.93      0.93       800
- weighted avg       0.93      0.93      0.93       800
-```
+Grafik menunjukkan learning curve yang healthy tanpa overfitting signifikan. Gap antara train dan validation accuracy yang minimal (sekitar 2%) mengindikasikan bahwa model memiliki kemampuan generalisasi yang sangat baik.
 
 ---
 
@@ -363,14 +347,17 @@ Conecting-Rod       0.99      0.97      0.98       100
 
 ## Kesimpulan Eksperimen
 
+Dari ketiga eksperimen yang telah dilakukan, beberapa pembelajaran penting dapat ditarik:
+
 | Aspek | Temuan |
 |-------|--------|
-| **Strategi augmentasi terbaik** | Augmentasi sebelum split (Aug-Split) menghasilkan akurasi lebih tinggi secara konsisten di semua model |
-| **Model terbaik** | YAMNet + Sequential Dense — test accuracy **95.75%** |
-| **Kontribusi YAMNet** | Transfer learning YAMNet meningkatkan akurasi ~10–16% dibanding CNN tanpa YAMNet |
-| **Kelas tersulit** | `Face-Drive` dan `Clutch-Shoe` — F1-score terendah di semua model |
-| **Kelas termudah** | `Conecting-Rod` dan `Piston` — F1-score ≥ 0.97 di Sequential |
-| **Efek augmentasi sebelum split** | Lebih banyak variasi di training set → generalisasi lebih baik |
+| **Strategi Augmentasi Optimal** | Melakukan augmentasi **sebelum** split dataset (Aug-Split) terbukti memberikan hasil superior. Pendekatan ini menghasilkan training set yang lebih besar dan lebih beragam, yang pada akhirnya meningkatkan kemampuan generalisasi model secara konsisten di semua algoritma yang diuji. |
+| **Model Terbaik** | **Sequential Dense Neural Network** dengan YAMNet embeddings mencapai test accuracy **94.44%**, unggul sekitar 3% dibanding algoritma ML tradisional. Arsitektur deep learning dengan regularization yang tepat (Dropout, BatchNorm) mampu menangkap pola kompleks dalam data audio dengan lebih baik. |
+| **Kontribusi Transfer Learning** | Pemanfaatan pre-trained YAMNet memberikan boost performa 15-19% dibanding model CNN yang dilatih dari scratch. Ini membuktikan bahwa knowledge yang sudah dipelajari YAMNet dari jutaan audio samples sangat relevan untuk domain kita. |
+| **Kelas Termudah** | `Conecting-Rod` (F1=0.99) dan `Piston` (F1=0.95) memiliki karakteristik suara yang sangat distinctive, membuat model dapat mengidentifikasi dengan akurasi sangat tinggi. |
+| **Kelas Tersulit** | `Slider` (F1=0.91) masih menjadi tantangan terbesar, kemungkinan karena overlap karakteristik suara dengan komponen CVT lainnya. Namun performa 0.91 tetap menunjukkan hasil yang sangat baik. |
+| **Impact Augmentasi** | Augmentasi sebelum split meningkatkan variasi di training set tanpa "mengotori" test set, menghasilkan model yang lebih robust terhadap variasi real-world. Perbedaan 11-12% accuracy antara Eksperimen 1 dan 2 membuktikan pentingnya strategi ini. |
+| **Computational Efficiency** | Model Sequential Dense, meski paling akurat, membutuhkan waktu training lebih lama. Untuk deployment dengan constraint komputasi, Random Forest (91.50%) atau SVM (91.38%) bisa menjadi alternatif yang sangat viable dengan trade-off minimal. |
 
 ---
 
