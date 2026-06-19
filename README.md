@@ -10,11 +10,13 @@
 
 ---
 
-## Deskripsi Proyek
+## Deskripsi Singkat Proyek
 
 **MotoSense** adalah sistem klasifikasi audio berbasis machine learning yang mendeteksi dan mengklasifikasikan kerusakan komponen mesin sepeda motor melalui analisis rekaman suara. Sistem ini mengekstrak fitur audio menggunakan **YAMNet** (pre-trained model dari Google) sebagai backbone, lalu mengklasifikasikan hasilnya menggunakan salah satu dari tiga model: **Sequential Neural Network (Dense)**, **Support Vector Machine (SVM)**, atau **Random Forest**.
 
-Kami melakukan tiga skenario eksperimen berbeda untuk menemukan kombinasi optimal antara strategi augmentasi data dan model klasifikasi. Hasil terbaik diperoleh dari **Eksperimen 1 (YAMNet + Aug-Split + Sequential Dense)** yang mencapai akurasi test **94.44%** - sebuah pencapaian yang menunjukkan potensi besar sistem ini untuk aplikasi diagnostik preventif pada kendaraan bermotor.
+Sistem mampu mengenali **8 kategori kerusakan** komponen mesin — mulai dari kampas kopling (*Clutch-Shoe*), stang seher (*Conecting-Rod*), hingga komponen CVT (*Drive-Belt*, *Slider*, *Roller*, *Face-Drive*) — hanya dari rekaman suara mesin dalam durasi singkat.
+
+Pendekatan terbaik (**YAMNet + Aug-Split + Sequential Dense**) mencapai akurasi test **94.44%**, membuktikan potensi besar sistem ini untuk aplikasi diagnostik preventif pada kendaraan bermotor.
 
 ---
 
@@ -32,6 +34,260 @@ Sistem mengklasifikasikan **8 kategori kerusakan** komponen mesin:
 | 6 | **Slider** | Slider CVT |
 | 7 | **Roller** | Roller CVT |
 | 8 | **Face-Drive** | Face pulley / drive face |
+
+---
+
+## Tautan Model
+
+Model yang digunakan dalam proyek ini dapat diunduh dan dimuat melalui tautan berikut:
+
+### YAMNet (Feature Extractor — Pre-trained by Google)
+- **TensorFlow Hub:** [https://tfhub.dev/google/yamnet/1](https://tfhub.dev/google/yamnet/1)
+- Dimuat otomatis saat runtime oleh `tensorflow_hub`:
+  ```python
+  import tensorflow_hub as hub
+  yamnet_model = hub.load("https://tfhub.dev/google/yamnet/1")
+  ```
+
+### Model Terlatih MotoSense (Sequential Dense + Scaler)
+
+File model hasil training tersimpan di dalam repository pada path berikut (relatif dari root):
+
+| File | Path | Deskripsi |
+|------|------|-----------|
+| `yamnet_sequential.h5` | `YAMNet aug-split/YAMNET + SVM + RF/models/sequential/keras/` | Model Keras Sequential Dense |
+| `yamnet_sequential.tflite` | `YAMNet aug-split/YAMNET + SVM + RF/models/sequential/tflite/` | Model TFLite (untuk mobile/edge) |
+| `yamnet_scaler.joblib` | `YAMNet aug-split/YAMNET + SVM + RF/models/sequential/scaler/` | StandardScaler untuk preprocessing fitur |
+| Model SVM | `YAMNet aug-split/YAMNET + SVM + RF/models/svm/` | Model SVM (joblib) |
+| Model Random Forest | `YAMNet aug-split/YAMNET + SVM + RF/models/random_forest/` | Model Random Forest (joblib) |
+
+> **Catatan:** Untuk menjalankan API, file model `yamnet_sequential.h5` dan `yamnet_scaler.joblib` **harus ditempatkan** di path `api/models/sequential/keras/` dan `api/models/sequential/scaler/` secara berturut-turut.
+
+#### Cara Memuat Model Secara Manual
+```python
+import tensorflow as tf
+import joblib
+
+# Load Keras model
+keras_model = tf.keras.models.load_model("models/sequential/keras/yamnet_sequential.h5")
+
+# Load Scaler
+scaler = joblib.load("models/sequential/scaler/yamnet_scaler.joblib")
+```
+
+---
+
+## Petunjuk Setup Environment
+
+### Prasyarat (Prerequisites)
+
+Pastikan perangkat lunak berikut sudah terinstal:
+
+- **Python 3.8+** — [https://www.python.org/downloads/](https://www.python.org/downloads/)
+- **pip** (biasanya sudah termasuk bersama Python)
+- **ffmpeg** — dibutuhkan oleh `librosa` untuk memproses audio MP3/M4A
+
+```bash
+# macOS (menggunakan Homebrew)
+brew install ffmpeg
+
+# Ubuntu / Debian
+sudo apt-get install ffmpeg
+
+# Windows (menggunakan Chocolatey)
+choco install ffmpeg
+```
+
+---
+
+### Langkah 1 — Clone Repository
+
+```bash
+git clone https://github.com/<username>/CapstonePijak2026.git
+cd CapstonePijak2026
+```
+
+---
+
+### Langkah 2 — Buat Virtual Environment (Direkomendasikan)
+
+```bash
+# Buat virtual environment
+python -m venv venv
+
+# Aktifkan virtual environment
+# macOS / Linux:
+source venv/bin/activate
+
+# Windows:
+venv\Scripts\activate
+```
+
+---
+
+### Langkah 3A — Install Dependencies untuk Notebook (Training)
+
+```bash
+pip install -r requirements.txt
+```
+
+Atau install secara manual:
+
+```bash
+pip install tensorflow>=2.15.0 tensorflow-hub>=0.16.0
+pip install librosa>=0.10.2 soundfile>=0.12.1
+pip install audiomentations
+pip install scikit-learn>=1.4.0
+pip install numpy pandas matplotlib seaborn
+pip install umap-learn
+pip install jupyter ipywidgets
+```
+
+---
+
+### Langkah 3B — Install Dependencies untuk API (Deployment)
+
+```bash
+pip install -r api/requirements.txt
+```
+
+---
+
+### Langkah 4 — Penanganan Error `setuptools` (Jika Ada)
+
+Jika muncul error `distutils` atau `pkg_resources` setelah menginstal `tensorflow-hub`, jalankan:
+
+```bash
+pip install "setuptools<81" --force-reinstall
+```
+
+---
+
+### Langkah 5 — Siapkan File Model untuk API
+
+Pastikan file model berada di lokasi yang benar relatif terhadap direktori `api/`:
+
+```
+api/
+└── models/
+    └── sequential/
+        ├── keras/
+        │   └── yamnet_sequential.h5       ← wajib ada
+        └── scaler/
+            └── yamnet_scaler.joblib       ← wajib ada
+```
+
+Salin file model dari hasil training:
+
+```bash
+mkdir -p api/models/sequential/keras
+mkdir -p api/models/sequential/scaler
+
+cp "YAMNet aug-split/YAMNET + SVM + RF/models/sequential/keras/yamnet_sequential.h5" \
+   api/models/sequential/keras/
+
+cp "YAMNet aug-split/YAMNET + SVM + RF/models/sequential/scaler/yamnet_scaler.joblib" \
+   api/models/sequential/scaler/
+```
+
+---
+
+## Cara Menjalankan Aplikasi
+
+### A. Menjalankan REST API (FastAPI)
+
+Pastikan sudah berada di direktori root proyek dan virtual environment sudah aktif.
+
+```bash
+cd api
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+API akan berjalan di: **http://localhost:8000**
+
+Dokumentasi interaktif (Swagger UI) tersedia di: **http://localhost:8000/docs**
+
+#### Endpoint yang Tersedia
+
+| Method | Endpoint | Deskripsi |
+|--------|----------|-----------|
+| `GET` | `/` | Health check & status model |
+| `GET` | `/classes` | Daftar 8 kelas kerusakan |
+| `POST` | `/predict` | Upload audio → prediksi kelas |
+
+#### Contoh Penggunaan API (`curl`)
+
+```bash
+# Health check
+curl http://localhost:8000/
+
+# Prediksi dari file audio
+curl -X POST "http://localhost:8000/predict" \
+     -H "accept: application/json" \
+     -H "Content-Type: multipart/form-data" \
+     -F "file=@rekaman_mesin.wav"
+```
+
+#### Contoh Response `/predict`
+
+```json
+{
+  "filename": "rekaman_mesin.wav",
+  "predicted_class": "Clutch-Shoe",
+  "confidence": 0.9412,
+  "all_scores": [
+    { "label": "Clutch-Shoe",   "probability": 0.9412 },
+    { "label": "Conecting-Rod", "probability": 0.0031 },
+    { "label": "Drive-Belt",    "probability": 0.0189 },
+    { "label": "Piston",        "probability": 0.0008 },
+    { "label": "Tensioner",     "probability": 0.0144 },
+    { "label": "Slider",        "probability": 0.0097 },
+    { "label": "Roller",        "probability": 0.0062 },
+    { "label": "Face-Drive",    "probability": 0.0057 }
+  ],
+  "inference_ms": 412.3
+}
+```
+
+Format audio yang diterima: `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`
+
+---
+
+### B. Menjalankan Notebook (Training / Reproduksi Eksperimen)
+
+Pastikan Jupyter sudah terinstal (sudah termasuk di `requirements.txt`).
+
+```bash
+# Jalankan dari direktori root proyek
+jupyter notebook
+```
+
+Kemudian buka notebook eksperimen yang diinginkan:
+
+```bash
+# Eksperimen terbaik — YAMNet + Aug-Split
+jupyter notebook "YAMNet aug-split/YAMNET + SVM + RF/MotoSense_YAMNet.ipynb"
+
+# Eksperimen 2 — YAMNet + Split-Aug
+jupyter notebook "YAMNet split-aug/YAMNET + SVM + RF/MotoSense_YAMNet.ipynb"
+
+# Eksperimen 3 — Tanpa YAMNet (Baseline CNN)
+jupyter notebook "without YAMNet/MotoSense_CNN_NoYAMNet.ipynb"
+```
+
+Notebook akan menjalankan seluruh pipeline secara berurutan:
+1. Setup path dan konfigurasi
+2. Rename & standardisasi nama file
+3. EDA — analisis durasi, sample rate, distribusi kelas
+4. Preprocessing — resample, segmentasi, normalisasi
+5. Augmentasi — menggunakan Audiomentations
+6. Split dataset — train/val/test
+7. Ekstraksi fitur YAMNet — menghasilkan 1024-dim embeddings
+8. Training Sequential Dense NN
+9. Training SVM
+10. Training Random Forest
+11. Evaluasi — classification report, confusion matrix
+12. Export model ke format Keras, TFLite, dan joblib
 
 ---
 
@@ -358,130 +614,6 @@ Dari ketiga eksperimen yang telah dilakukan, beberapa pembelajaran penting dapat
 | **Kelas Tersulit** | `Slider` (F1=0.91) masih menjadi tantangan terbesar, kemungkinan karena overlap karakteristik suara dengan komponen CVT lainnya. Namun performa 0.91 tetap menunjukkan hasil yang sangat baik. |
 | **Impact Augmentasi** | Augmentasi sebelum split meningkatkan variasi di training set tanpa "mengotori" test set, menghasilkan model yang lebih robust terhadap variasi real-world. Perbedaan 11-12% accuracy antara Eksperimen 1 dan 2 membuktikan pentingnya strategi ini. |
 | **Computational Efficiency** | Model Sequential Dense, meski paling akurat, membutuhkan waktu training lebih lama. Untuk deployment dengan constraint komputasi, Random Forest (91.50%) atau SVM (91.38%) bisa menjadi alternatif yang sangat viable dengan trade-off minimal. |
-
----
-
-## REST API
-
-Model Sequential Dense di-deploy sebagai REST API menggunakan **FastAPI**.
-
-### Endpoint
-
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `GET` | `/` | Health check & status model |
-| `GET` | `/classes` | Daftar 8 kelas kerusakan |
-| `POST` | `/predict` | Upload audio → prediksi kelas |
-
-### Contoh Response `/predict`
-
-```json
-{
-  "filename": "rekaman_mesin.wav",
-  "predicted_class": "Clutch-Shoe",
-  "confidence": 0.9412,
-  "all_scores": [
-    { "label": "Clutch-Shoe",   "probability": 0.9412 },
-    { "label": "Conecting-Rod", "probability": 0.0031 },
-    { "label": "Drive-Belt",    "probability": 0.0189 },
-    { "label": "Piston",        "probability": 0.0008 },
-    { "label": "Tensioner",     "probability": 0.0144 },
-    { "label": "Slider",        "probability": 0.0097 },
-    { "label": "Roller",        "probability": 0.0062 },
-    { "label": "Face-Drive",    "probability": 0.0057 }
-  ],
-  "inference_ms": 412.3
-}
-```
-
-Format audio yang diterima: `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`
-
-### Menjalankan API
-
-```bash
-cd api
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-> **Catatan:** File model (`models/sequential/keras/yamnet_sequential.h5` dan `models/sequential/scaler/yamnet_scaler.joblib`) harus tersedia relatif terhadap direktori `api/`.
-
-### Inferensi API
-
-Pipeline inferensi di API:
-1. Load audio → resample 16kHz → mono
-2. Trim silence (top_db=30)
-3. Normalisasi amplitudo
-4. Ekstraksi YAMNet embeddings → rata-rata per segmen
-5. StandardScaler transform
-6. Prediksi dengan Sequential Dense model
-7. Kembalikan kelas + confidence + all scores
-
----
-
-## Instalasi & Reproduksi
-
-### Prerequisites
-
-- Python 3.8+
-- pip
-- ffmpeg
-
-```bash
-# macOS
-brew install ffmpeg
-
-# Ubuntu/Debian
-sudo apt-get install ffmpeg
-```
-
-### Install Dependencies (Notebook)
-
-```bash
-pip install tensorflow>=2.15.0 tensorflow-hub>=0.16.0
-pip install librosa>=0.10.2 soundfile>=0.12.1
-pip install audiomentations
-pip install scikit-learn>=1.4.0
-pip install numpy pandas matplotlib seaborn
-pip install umap-learn
-pip install jupyter ipywidgets
-```
-
-### Install Dependencies (API)
-
-```bash
-pip install -r api/requirements.txt
-```
-
-> **Catatan khusus:** Jika muncul error `distutils/pkg_resources` setelah install `tensorflow-hub`, jalankan:
-> ```bash
-> pip install "setuptools<81" --force-reinstall
-> ```
-
----
-
-## Menjalankan Notebook
-
-Buka notebook di direktori eksperimen yang diinginkan:
-
-```bash
-# Eksperimen terbaik (Aug-Split)
-jupyter notebook "YAMNet aug-split/YAMNET + SVM + RF/MotoSense_YAMNet.ipynb"
-```
-
-Notebook akan menjalankan seluruh pipeline secara berurutan:
-1. Setup path dan konfigurasi
-2. Rename & standardisasi nama file
-3. EDA — analisis durasi, sample rate, distribusi kelas
-4. Preprocessing — resample, segmentasi, normalisasi
-5. Augmentasi — menggunakan Audiomentations
-6. Split dataset — train/val/test
-7. Ekstraksi fitur YAMNet — menghasilkan 1024-dim embeddings
-8. Training Sequential Dense NN
-9. Training SVM
-10. Training Random Forest
-11. Evaluasi — classification report, confusion matrix
-12. Export model ke format Keras, TFLite, dan joblib
 
 ---
 
